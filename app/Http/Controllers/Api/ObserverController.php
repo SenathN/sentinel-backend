@@ -54,13 +54,45 @@ class ObserverController extends Controller
                                 $fileInfo['original_name'] = $dataItem['image_data']['filename'];
                             }
                             
+                            // Extract detection data
+                            $detectionData = $dataItem['detection_data'] ?? [];
+                            
+                            // Get or create device
+                            $deviceId = $detectionData['device_id'] ?? null;
+                            $device = null;
+                            if ($deviceId) {
+                                $device = \App\Models\Device::findByDeviceIdOrCreate($deviceId);
+                                $fileInfo['device_id'] = $device->id;
+                            }
+                            
+                            // Add detection fields
+                            $fileInfo['unique_id'] = $detectionData['unique_id'] ?? null;
+                            $fileInfo['passenger_count'] = $detectionData['passenger_count'] ?? 0;
+                            
                             try {
                                 $observerFile = ObserverFile::create($fileInfo);
+                                
+                                // Create GPS data record if location data is available
+                                if (isset($detectionData['latitude']) && isset($detectionData['longitude'])) {
+                                    \App\Models\GpsData::create([
+                                        'observer_file_id' => $observerFile->id,
+                                        'device_id' => $device?->id,
+                                        'latitude' => $detectionData['latitude'],
+                                        'longitude' => $detectionData['longitude'],
+                                        'gps_timestamp' => $detectionData['timestamp'] ?? now(),
+                                        'timezone' => $detectionData['timezone'] ?? null,
+                                        'passenger_count' => $detectionData['passenger_count'] ?? 0,
+                                    ]);
+                                }
+                                
                                 Log::info('Observer file record created from nested data', [
                                     'observer_file_id' => $observerFile->id,
                                     'request_id' => $observerRequest->id,
                                     'file_path' => $fileInfo['file_path'],
                                     'original_filename' => $fileInfo['original_name'],
+                                    'device_id' => $device?->id,
+                                    'unique_id' => $fileInfo['unique_id'],
+                                    'passenger_count' => $fileInfo['passenger_count'],
                                     'data_index' => $index
                                 ]);
                                 $filesCount++;
