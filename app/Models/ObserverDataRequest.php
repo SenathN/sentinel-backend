@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ObserverDataRequest extends Model
 {
@@ -13,6 +14,7 @@ class ObserverDataRequest extends Model
         'request_method',
         'request_url',
         'request_data_path',
+        'device_id',
         'request_headers',
         'files_count',
     ];
@@ -24,5 +26,10 @@ class ObserverDataRequest extends Model
     public function observerFiles(): HasMany
     {
         return $this->hasMany(ObserverFile::class);
+    }
+
+    public function device(): BelongsTo
+    {
+        return $this->belongsTo(Device::class);
     }
 }

@@ -20,6 +20,29 @@ class ObserverController extends Controller
 
         // Log::info('Observer data sync request', $request->all());
 
+        // Extract device information from request data
+        $device = null;
+        $deviceId = null;
+        
+        // Try to get device_id from nested data structure
+        if ($request->has('data') && is_array($request->input('data'))) {
+            $dataArray = $request->input('data');
+            $firstDataItem = $dataArray[0] ?? null;
+            if ($firstDataItem && isset($firstDataItem['detection_data']['device_id'])) {
+                $deviceId = $firstDataItem['detection_data']['device_id'];
+            }
+        }
+        
+        // Fallback: try to get device_id from top level
+        if (!$deviceId && $request->has('device_id')) {
+            $deviceId = $request->input('device_id');
+        }
+        
+        // Get or create device
+        if ($deviceId) {
+            $device = \App\Models\Device::findByDeviceIdOrCreate($deviceId);
+        }
+
         // Save request data to file
         $requestDataPath = $this->saveRequestDataToFile($request->all());
 
@@ -30,6 +53,7 @@ class ObserverController extends Controller
             'request_method' => $request->method(),
             'request_url' => $request->fullUrl(),
             'request_data_path' => $requestDataPath,
+            'device_id' => $device?->id,
             'request_headers' => $request->headers->all(),
             'files_count' => 0,
         ]);
@@ -57,11 +81,8 @@ class ObserverController extends Controller
                             // Extract detection data
                             $detectionData = $dataItem['detection_data'] ?? [];
                             
-                            // Get or create device
-                            $deviceId = $detectionData['device_id'] ?? null;
-                            $device = null;
-                            if ($deviceId) {
-                                $device = \App\Models\Device::findByDeviceIdOrCreate($deviceId);
+                            // Use device object that was already created at the beginning
+                            if ($device) {
                                 $fileInfo['device_id'] = $device->id;
                             }
                             
@@ -122,13 +143,19 @@ class ObserverController extends Controller
             if (is_string($value) && $this->isBase64Image($value) && $key !== 'data') {
                 $fileInfo = $this->processBase64Image($value, $observerRequest->id, $key);
                 if ($fileInfo) {
+                    // Add device_id if device is available
+                    if ($device) {
+                        $fileInfo['device_id'] = $device->id;
+                    }
+                    
                     try {
                         $observerFile = ObserverFile::create($fileInfo);
                         Log::info('Observer file record created from top level', [
                             'observer_file_id' => $observerFile->id,
                             'request_id' => $observerRequest->id,
                             'file_path' => $fileInfo['file_path'],
-                            'field_key' => $key
+                            'field_key' => $key,
+                            'device_id' => $device?->id
                         ]);
                         $filesCount++;
                     } catch (\Exception $e) {
@@ -152,12 +179,18 @@ class ObserverController extends Controller
                 foreach ($files as $index => $file) {
                     $fileInfo = $this->processUploadedFile($file, $observerRequest->id, "file_{$index}");
                     if ($fileInfo) {
+                        // Add device_id if device is available
+                        if ($device) {
+                            $fileInfo['device_id'] = $device->id;
+                        }
+                        
                         try {
                             $observerFile = ObserverFile::create($fileInfo);
                             Log::info('Observer file record created for uploaded file', [
                                 'observer_file_id' => $observerFile->id,
                                 'request_id' => $observerRequest->id,
-                                'file_path' => $fileInfo['file_path']
+                                'file_path' => $fileInfo['file_path'],
+                                'device_id' => $device?->id
                             ]);
                             $filesCount++;
                         } catch (\Exception $e) {
@@ -174,12 +207,18 @@ class ObserverController extends Controller
                 // Single file
                 $fileInfo = $this->processUploadedFile($files, $observerRequest->id, 'file');
                 if ($fileInfo) {
+                    // Add device_id if device is available
+                    if ($device) {
+                        $fileInfo['device_id'] = $device->id;
+                    }
+                    
                     try {
                         $observerFile = ObserverFile::create($fileInfo);
                         Log::info('Observer file record created for single uploaded file', [
                             'observer_file_id' => $observerFile->id,
                             'request_id' => $observerRequest->id,
-                            'file_path' => $fileInfo['file_path']
+                            'file_path' => $fileInfo['file_path'],
+                            'device_id' => $device?->id
                         ]);
                         $filesCount++;
                     } catch (\Exception $e) {
@@ -199,13 +238,19 @@ class ObserverController extends Controller
             if ($key !== 'files') { // Skip if already processed above
                 $fileInfo = $this->processUploadedFile($file, $observerRequest->id, $key);
                 if ($fileInfo) {
+                    // Add device_id if device is available
+                    if ($device) {
+                        $fileInfo['device_id'] = $device->id;
+                    }
+                    
                     try {
                         $observerFile = ObserverFile::create($fileInfo);
                         Log::info('Observer file record created for individual file field', [
                             'observer_file_id' => $observerFile->id,
                             'request_id' => $observerRequest->id,
                             'field_key' => $key,
-                            'file_path' => $fileInfo['file_path']
+                            'file_path' => $fileInfo['file_path'],
+                            'device_id' => $device?->id
                         ]);
                         $filesCount++;
                     } catch (\Exception $e) {

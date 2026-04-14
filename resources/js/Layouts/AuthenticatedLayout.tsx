@@ -4,9 +4,12 @@ import NavLink from '@/Components/NavLink';
 import ResponsiveNavLink from '@/Components/ResponsiveNavLink';
 import { Link, usePage } from '@inertiajs/react';
 import { useState } from 'react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { ChevronDown } from 'lucide-react';
 
 export default function AuthenticatedLayout({ header, children }) {
     const user = usePage().props.auth.user;
+    const { flash } = usePage().props;
 
     const [showingNavigationDropdown, setShowingNavigationDropdown] =
         useState(false);
@@ -30,6 +33,22 @@ export default function AuthenticatedLayout({ header, children }) {
                                 >
                                     Dashboard
                                 </NavLink>
+                                
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <button className="inline-flex items-center px-1 pt-1 border-b-2 border-transparent text-sm font-medium leading-5 text-gray-500 hover:text-gray-700 hover:border-gray-300 focus:outline-none focus:text-gray-700 focus:border-gray-300 transition duration-150 ease-in-out">
+                                            Observers
+                                            <ChevronDown className="ml-1 h-4 w-4" />
+                                        </button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent>
+                                        <DropdownMenuItem asChild>
+                                            <Link href={route('devices.index')}>
+                                                Devices
+                                            </Link>
+                                        </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
                             </div>
                         </div>
 
@@ -134,6 +153,15 @@ export default function AuthenticatedLayout({ header, children }) {
                         >
                             Dashboard
                         </ResponsiveNavLink>
+                        
+                        <div className="px-4">
+                            <div className="text-base font-medium text-gray-800 mb-2">Observers</div>
+                            <div className="pl-4 space-y-1">
+                                <ResponsiveNavLink href={route('devices.index')}>
+                                    Devices
+                                </ResponsiveNavLink>
+                            </div>
+                        </div>
                     </div>
 
                     <div className="border-t border-gray-200 pb-1 pt-4">
@@ -161,6 +189,21 @@ export default function AuthenticatedLayout({ header, children }) {
                     </div>
                 </div>
             </nav>
+
+            {flash && (flash.success || flash.error) && (
+                <div className="mx-auto max-w-7xl px-4 py-2 sm:px-6 lg:px-8">
+                    {flash.success && (
+                        <div className="bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-md">
+                            {flash.success}
+                        </div>
+                    )}
+                    {flash.error && (
+                        <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-md">
+                            {flash.error}
+                        </div>
+                    )}
+                </div>
+            )}
 
             {header && (
                 <header className="bg-white shadow">

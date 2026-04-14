@@ -18,9 +18,25 @@ class Device extends Model
         'is_active' => 'boolean',
     ];
 
+    protected $appends = ['last_activity_at'];
+
     public function observerFiles(): HasMany
     {
         return $this->hasMany(ObserverFile::class);
+    }
+
+    public function observerDataRequests(): HasMany
+    {
+        return $this->hasMany(ObserverDataRequest::class);
+    }
+
+    /**
+     * Get the last activity timestamp for this device
+     */
+    public function getLastActivityAtAttribute()
+    {
+        $lastFile = $this->observerFiles()->latest('created_at')->first();
+        return $lastFile ? $lastFile->created_at : null;
     }
 
     /**

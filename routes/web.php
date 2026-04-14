@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\DeviceController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -22,6 +23,14 @@ Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+    
+    Route::resource('observers/devices', DeviceController::class)->names([
+        'index' => 'devices.index',
+        'show' => 'devices.show',
+        'store' => 'devices.store',
+        'update' => 'devices.update',
+        'destroy' => 'devices.destroy',
+    ]);
 });
 
 require __DIR__.'/auth.php';
