@@ -1,5 +1,5 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { Head, Link } from '@inertiajs/react';
+import { Head, Link, router } from '@inertiajs/react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -15,10 +15,16 @@ import {
     CheckCircle,
     XCircle,
     TrendingUp,
-    Database
+    Database,
+    RefreshCw
 } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
 export default function ShowDevice({ device, stats }) {
+    const [isRefreshing, setIsRefreshing] = useState(false);
+    const [lastRefresh, setLastRefresh] = useState(new Date());
+    const [countdown, setCountdown] = useState(30);
+
     const formatFileSize = (bytes) => {
         if (bytes === 0) return '0 Bytes';
         const k = 1024;
@@ -32,6 +38,64 @@ export default function ShowDevice({ device, stats }) {
         return new Date(dateString).toLocaleString();
     };
 
+    const formatLastRefresh = (date) => {
+        return date.toLocaleString('en-GB', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit'
+        }).replace(',', '');
+    };
+
+    const refreshData = () => {
+        setIsRefreshing(true);
+        router.reload({
+            only: ['device', 'stats'],
+            onSuccess: () => {
+                setLastRefresh(new Date());
+                setIsRefreshing(false);
+            },
+            onError: () => {
+                setIsRefreshing(false);
+            }
+        });
+    };
+
+    useEffect(() => {
+        const interval = setInterval(() => {
+            refreshData();
+        }, 30000); // Refresh every 30 seconds
+
+        return () => clearInterval(interval);
+    }, []);
+
+    useEffect(() => {
+        // Initial timestamp
+        setLastRefresh(new Date());
+    }, []);
+
+    useEffect(() => {
+        const countdownInterval = setInterval(() => {
+            setCountdown(prev => {
+                if (prev <= 1) {
+                    return 30; // Reset to 30 when refresh happens
+                }
+                return prev - 1;
+            });
+        }, 1000);
+
+        return () => clearInterval(countdownInterval);
+    }, []);
+
+    useEffect(() => {
+        // Reset countdown when refresh happens
+        if (!isRefreshing) {
+            setCountdown(30);
+        }
+    }, [isRefreshing]);
+
     return (
         <AuthenticatedLayout
             header={
@@ -39,19 +103,36 @@ export default function ShowDevice({ device, stats }) {
                     <h2 className="text-xl font-semibold leading-tight text-gray-800">
                         Device Details - {device.name}
                     </h2>
-                    <Link href={route('devices.index')}>
-                        <Button variant="outline">
-                            <ArrowLeft className="mr-2 h-4 w-4" />
-                            Back to Devices
-                        </Button>
-                    </Link>
+                    <div className="flex items-center space-x-3">
+                        <div className="flex items-center space-x-2 text-sm text-gray-600">
+                            <Clock className="h-4 w-4" />
+                            <span>Data as at: {formatLastRefresh(lastRefresh)}</span>
+                        </div>
+                        <button
+                            onClick={refreshData}
+                            disabled={isRefreshing}
+                            className="flex items-center space-x-1 px-3 py-1 text-blue-600 hover:text-blue-800 disabled:text-gray-400 transition-colors"
+                            title="Refresh data"
+                        >
+                            <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                            <span className="text-xs">
+                                {isRefreshing ? 'Refreshing...' : `Next refresh in ${countdown}s`}
+                            </span>
+                        </button>
+                        <Link href={route('devices.index')}>
+                            <Button variant="outline">
+                                <ArrowLeft className="mr-2 h-4 w-4" />
+                                Back to Devices
+                            </Button>
+                        </Link>
+                    </div>
                 </div>
             }
         >
             <Head title={`Device - ${device.name}`} />
 
             <div className="py-12">
-                <div className="mx-auto max-w-7xl sm:px-6 lg:px-8 space-y-6">
+                <div className={`mx-auto max-w-7xl sm:px-6 lg:px-8 space-y-6 transition-opacity duration-300 ${isRefreshing ? 'opacity-60' : ''}`}>
                     {/* Device Information */}
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                         <div className="lg:col-span-2">

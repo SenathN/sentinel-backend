@@ -67,3 +67,32 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Leaflet Map Styles */
+.leaflet-container {
+  font-family: inherit;
+}
+
+.leaflet-popup-content-wrapper {
+  border-radius: 8px;
+}
+
+.leaflet-popup-content {
+  margin: 12px 16px;
+  line-height: 1.4;
+}
+
+.leaflet-marker-icon {
+  border-radius: 50%;
+}
+
+/* Custom dot marker styles */
+.custom-dot-marker {
+  background: transparent !important;
+  border: none !important;
+}
+
+.custom-dot-marker div {
+  margin: 0 !important;
+  padding: 0 !important;
+}
