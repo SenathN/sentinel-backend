@@ -15,3 +15,4 @@ use Illuminate\Support\Facades\Route;
 */
 
 Route::post('/observer/data-sync', [ObserverController::class, 'dataSync'])->name('api.observer.data-sync');
+Route::post('/observer/sync-check', [ObserverController::class, 'syncCheck'])->name('api.observer.sync-check');

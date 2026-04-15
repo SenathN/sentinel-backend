@@ -153,6 +153,10 @@ export default function ShowDevice({ device, stats }) {
                                         <span className="text-sm text-gray-600">This Month</span>
                                         <span className="font-semibold">{stats.files_this_month}</span>
                                     </div>
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-sm text-gray-600">Last Hour</span>
+                                        <span className="font-semibold">{stats.files_last_hour}</span>
+                                    </div>
                                 </CardContent>
                             </Card>
                         </div>
@@ -175,8 +179,8 @@ export default function ShowDevice({ device, stats }) {
                                     <Table>
                                         <TableHeader>
                                             <TableRow>
-                                                <TableHead>Timestamp</TableHead>
-                                                <TableHead>Passenger Count</TableHead>
+                                                <TableHead>Sync. Timestamp</TableHead>
+                                                <TableHead>Passenger Average</TableHead>
                                                 <TableHead>IP Address</TableHead>
                                                 <TableHead>User Agent</TableHead>
                                                 <TableHead>Files</TableHead>
@@ -189,9 +193,12 @@ export default function ShowDevice({ device, stats }) {
                                                         <div className="flex items-center text-sm">
                                                             <Clock className="mr-1 h-3 w-3" />
                                                             {formatDate(request.created_at)}
+                                                            {/* {JSON.stringify(request)} */}
                                                         </div>
                                                     </TableCell>
-                                                    <TableCell>{request.passenger_count || 0}</TableCell>
+                                                    <TableCell>
+                                                        {request.observer_files.length>0 ? request.observer_files.map(i=>i?.passenger_count || 0).reduce((a,c) => a+c, 0) / request.observer_files.length : 0 }
+                                                    </TableCell>
                                                     <TableCell className="font-mono text-xs">{request.ip_address}</TableCell>
                                                     <TableCell className="text-xs max-w-xs truncate">
                                                         {request.user_agent}
@@ -213,12 +220,13 @@ export default function ShowDevice({ device, stats }) {
                                                                             </a>
                                                                             <span className="text-xs text-gray-500">Passengers: {file.passenger_count || 0}</span>
                                                                         </div>
+
                                                                         {file.gps_data && (
                                                                             <div className="text-xs text-gray-600 space-y-1">
                                                                                 <div className="flex items-center">
                                                                                     <span className="font-medium">GPS:</span>
                                                                                     <span className="ml-2 font-mono">
-                                                                                        {file.gps_data.latitude?.toFixed(6)}, {file.gps_data.longitude?.toFixed(6)}
+                                                                                        {file.gps_data.latitude}, {file.gps_data.longitude}
                                                                                     </span>
                                                                                 </div>
                                                                                 <div className="flex items-center">

@@ -17,9 +17,6 @@ class ObserverController extends Controller
      */
     public function dataSync(Request $request)
     {
-
-        // Log::info('Observer data sync request', $request->all());
-
         // Extract device information from request data
         $device = null;
         $deviceId = null;
@@ -60,6 +57,8 @@ class ObserverController extends Controller
 
         $filesCount = 0;
 
+        $archive_safe_unique_id_list = collect();
+
         // Handle the specific JSON structure with nested data array
         if ($request->has('data') && is_array($request->input('data'))) {
             $dataArray = $request->input('data');
@@ -89,9 +88,15 @@ class ObserverController extends Controller
                             // Add detection fields
                             $fileInfo['unique_id'] = $detectionData['unique_id'] ?? null;
                             $fileInfo['passenger_count'] = $detectionData['passenger_count'] ?? 0;
+
+                            if( ObserverFile::where('unique_id', $fileInfo['unique_id'])->count() > 0){
+                                // Already synchronized
+                                continue;
+                            }
                             
                             try {
                                 $observerFile = ObserverFile::create($fileInfo);
+                                $archive_safe_unique_id_list->push(isset($fileInfo['unique_id']) ? $fileInfo['unique_id'] : null);
                                 
                                 // Create GPS data record if location data is available
                                 if (isset($detectionData['latitude']) && isset($detectionData['longitude'])) {
@@ -138,134 +143,6 @@ class ObserverController extends Controller
             }
         }
 
-        // Handle base64 image data at top level (fallback for other formats)
-        foreach ($request->all() as $key => $value) {
-            if (is_string($value) && $this->isBase64Image($value) && $key !== 'data') {
-                $fileInfo = $this->processBase64Image($value, $observerRequest->id, $key);
-                if ($fileInfo) {
-                    // Add device_id if device is available
-                    if ($device) {
-                        $fileInfo['device_id'] = $device->id;
-                    }
-                    
-                    try {
-                        $observerFile = ObserverFile::create($fileInfo);
-                        Log::info('Observer file record created from top level', [
-                            'observer_file_id' => $observerFile->id,
-                            'request_id' => $observerRequest->id,
-                            'file_path' => $fileInfo['file_path'],
-                            'field_key' => $key,
-                            'device_id' => $device?->id
-                        ]);
-                        $filesCount++;
-                    } catch (\Exception $e) {
-                        Log::error('Failed to create observer file record from top level', [
-                            'error' => $e->getMessage(),
-                            'trace' => $e->getTraceAsString(),
-                            'request_id' => $observerRequest->id,
-                            'file_info' => $fileInfo,
-                            'field_key' => $key
-                        ]);
-                    }
-                }
-            }
-        }
-
-        // Handle regular file uploads if any
-        if ($request->hasFile('files')) {
-            $files = $request->file('files');
-            
-            if (is_array($files)) {
-                foreach ($files as $index => $file) {
-                    $fileInfo = $this->processUploadedFile($file, $observerRequest->id, "file_{$index}");
-                    if ($fileInfo) {
-                        // Add device_id if device is available
-                        if ($device) {
-                            $fileInfo['device_id'] = $device->id;
-                        }
-                        
-                        try {
-                            $observerFile = ObserverFile::create($fileInfo);
-                            Log::info('Observer file record created for uploaded file', [
-                                'observer_file_id' => $observerFile->id,
-                                'request_id' => $observerRequest->id,
-                                'file_path' => $fileInfo['file_path'],
-                                'device_id' => $device?->id
-                            ]);
-                            $filesCount++;
-                        } catch (\Exception $e) {
-                            Log::error('Failed to create observer file record for uploaded file', [
-                                'error' => $e->getMessage(),
-                                'trace' => $e->getTraceAsString(),
-                                'request_id' => $observerRequest->id,
-                                'file_info' => $fileInfo
-                            ]);
-                        }
-                    }
-                }
-            } else {
-                // Single file
-                $fileInfo = $this->processUploadedFile($files, $observerRequest->id, 'file');
-                if ($fileInfo) {
-                    // Add device_id if device is available
-                    if ($device) {
-                        $fileInfo['device_id'] = $device->id;
-                    }
-                    
-                    try {
-                        $observerFile = ObserverFile::create($fileInfo);
-                        Log::info('Observer file record created for single uploaded file', [
-                            'observer_file_id' => $observerFile->id,
-                            'request_id' => $observerRequest->id,
-                            'file_path' => $fileInfo['file_path'],
-                            'device_id' => $device?->id
-                        ]);
-                        $filesCount++;
-                    } catch (\Exception $e) {
-                        Log::error('Failed to create observer file record for single uploaded file', [
-                            'error' => $e->getMessage(),
-                            'trace' => $e->getTraceAsString(),
-                            'request_id' => $observerRequest->id,
-                            'file_info' => $fileInfo
-                        ]);
-                    }
-                }
-            }
-        }
-
-        // Check for individual file fields
-        foreach ($request->allFiles() as $key => $file) {
-            if ($key !== 'files') { // Skip if already processed above
-                $fileInfo = $this->processUploadedFile($file, $observerRequest->id, $key);
-                if ($fileInfo) {
-                    // Add device_id if device is available
-                    if ($device) {
-                        $fileInfo['device_id'] = $device->id;
-                    }
-                    
-                    try {
-                        $observerFile = ObserverFile::create($fileInfo);
-                        Log::info('Observer file record created for individual file field', [
-                            'observer_file_id' => $observerFile->id,
-                            'request_id' => $observerRequest->id,
-                            'field_key' => $key,
-                            'file_path' => $fileInfo['file_path'],
-                            'device_id' => $device?->id
-                        ]);
-                        $filesCount++;
-                    } catch (\Exception $e) {
-                        Log::error('Failed to create observer file record for individual file field', [
-                            'error' => $e->getMessage(),
-                            'trace' => $e->getTraceAsString(),
-                            'request_id' => $observerRequest->id,
-                            'field_key' => $key,
-                            'file_info' => $fileInfo
-                        ]);
-                    }
-                }
-            }
-        }
-
         // Update files count
         $observerRequest->update(['files_count' => $filesCount]);
 
@@ -282,7 +159,54 @@ class ObserverController extends Controller
             'timestamp' => now()->toISOString(),
             'request_id' => $observerRequest->id,
             'received_data_count' => count($request->all()),
-            'files_received' => $filesCount
+            'files_received' => $filesCount,
+            'safe_archive_list' => $archive_safe_unique_id_list->filter()
+        ]);
+    }
+
+    /**
+     * Handle sync-check POST request from observer
+     * Returns items that are already synchronized and available in the system
+     */
+    public function syncCheck(Request $request)
+    {
+        // Validate the request
+        $request->validate([
+            'unique_ids' => 'required|array',
+            'unique_ids.*' => 'required|string'
+        ]);
+
+        $uniqueIds = $request->input('unique_ids');
+        
+        Log::info('Observer sync-check request', [
+            'unique_ids_count' => count($uniqueIds),
+            'unique_ids' => $uniqueIds,
+            'ip' => $request->ip()
+        ]);
+
+        // Find all ObserverFile records with the given unique_ids
+        $synchronizedItems = ObserverFile::whereIn('unique_id', $uniqueIds)
+            ->whereNotNull('unique_id')
+            ->get(['unique_id', 'id', 'created_at', 'file_path', 'original_name']);
+
+        // Extract just the unique_ids that are found in the system
+        $synchronizedUniqueIds = $synchronizedItems->pluck('unique_id')->unique()->values();
+
+        Log::info('Observer sync-check response', [
+            'requested_count' => count($uniqueIds),
+            'found_count' => $synchronizedUniqueIds->count(),
+            'synchronized_items' => $synchronizedUniqueIds->toArray(),
+            'ip' => $request->ip()
+        ]);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Sync check completed',
+            'timestamp' => now()->toISOString(),
+            'requested_unique_ids' => $uniqueIds,
+            'synchronized_unique_ids' => $synchronizedUniqueIds->toArray(),
+            'synchronized_count' => $synchronizedUniqueIds->count(),
+            // 'details' => $synchronizedItems->toArray()
         ]);
     }
 
@@ -392,7 +316,7 @@ class ObserverController extends Controller
 
             // Generate filename with proper directory structure
             $filename = "observer_{$requestId}_{$fieldKey}_" . time() . ".{$imageType}";
-            $directory = "observer-files/" . date('Y/m/d/H');
+            $directory = "observer-files/datasets/" . date('Y/m/d/H');
             $path = $directory . '/' . $filename;
 
             Log::info('Attempting to store file', [
@@ -470,7 +394,7 @@ class ObserverController extends Controller
             ]);
 
             $filename = "observer_{$requestId}_{$fieldKey}_" . time() . "_" . Str::random(8) . "." . $file->getClientOriginalExtension();
-            $directory = "observer-files/" . date('Y/m/d/H');
+            $directory = "observer-files/datasets/" . date('Y/m/d/H');
             $path = $directory . '/' . $filename;
 
             Log::info('Attempting to store uploaded file', [
@@ -539,7 +463,7 @@ class ObserverController extends Controller
     {
         try {
             $filename = "request_data_" . time() . "_" . Str::random(8) . ".json";
-            $directory = "observer-files/requests/" . date('Y/m/d/H');
+            $directory = "observer-files/datasets/" . date('Y/m/d/H');
             $path = $directory . '/' . $filename;
 
             // Ensure directory exists

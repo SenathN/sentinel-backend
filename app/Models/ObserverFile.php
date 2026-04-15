@@ -4,7 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class ObserverFile extends Model
 {
@@ -30,8 +30,8 @@ class ObserverFile extends Model
         return $this->belongsTo(Device::class, 'device_id');
     }
 
-    public function gpsData(): HasMany
+    public function gpsData(): HasOne
     {
-        return $this->hasMany(GpsData::class);
+        return $this->hasOne(GpsData::class);
     }
 }

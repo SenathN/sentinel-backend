@@ -48,10 +48,16 @@ class DeviceController extends Controller
             'files_today' => $device->observerFiles()
                 ->whereDate('created_at', now()->today())
                 ->count(),
+            'files_last_hour' => $device->observerFiles()
+                ->whereBetween('created_at', [now()->subHours(1), now()])
+                ->count(),
             'last_activity' => $device->last_activity_at,
             'total_size' => $device->observerFiles()->sum('size') ?? 0,
         ];
-
+// dd('Observers/ShowDevice', [
+//             'device' => $device,
+//             'stats' => $stats,
+//         ]);
         return Inertia::render('Observers/ShowDevice', [
             'device' => $device,
             'stats' => $stats,
