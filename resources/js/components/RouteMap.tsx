@@ -16,9 +16,38 @@ interface RouteMapProps {
   gpsData: GpsPoint[];
   height?: string;
   selectedDeviceId?: number | null;
+  selectedTime?: number;
+  isReset?: boolean;
 }
 
-export default function RouteMap({ gpsData, height = '400px', selectedDeviceId }: RouteMapProps) {
+export default function RouteMap({ gpsData, height = '400px', selectedDeviceId, selectedTime = 100, isReset = true }: RouteMapProps) {
+
+  // Get marker state for each point based on filters
+  const getMarkerState = (point: GpsPoint): 'show' | 'faded' | 'hide' => {
+    // State 1: Hide - completely removed
+    if (selectedDeviceId && point.device_id !== selectedDeviceId) {
+      return 'hide';
+    }
+    
+    // If reset or no time filtering, show all
+    if (isReset || !gpsData || gpsData.length === 0) {
+      return 'show';
+    }
+    
+    // State 2/3: Show vs Faded based on time window
+    const timestamps = gpsData.map(d => new Date(d.gps_timestamp).getTime());
+    const min = Math.min(...timestamps);
+    const max = Math.max(...timestamps);
+    const selectedTimestamp = min + (selectedTime / 100) * (max - min);
+    
+    // Calculate time window (5% of total time range)
+    const timeWindow = (max - min) * 0.05; // 5% window
+    
+    const pointTime = new Date(point.gps_timestamp).getTime();
+    const isInTimeWindow = Math.abs(pointTime - selectedTimestamp) <= timeWindow;
+    
+    return isInTimeWindow ? 'show' : 'faded';
+  };
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -70,10 +99,14 @@ export default function RouteMap({ gpsData, height = '400px', selectedDeviceId }
   };
 
   // Create custom dot icon for markers
-  const createDotIcon = (passengerCount: number, isSelected: boolean = false) => {
+  const createDotIcon = (passengerCount: number) => {
     const color = getPassengerColor(passengerCount);
-    const size = isSelected ? 12 : 8;
-    const borderWidth = isSelected ? 3 : 1;
+    const size = 8;
+    const borderWidth = 1;
+    const borderColor = 'white';
+    const boxShadow = '0 2px 4px rgba(0,0,0,0.3)';
+    const zIndex = 500;
+    
     return new DivIcon({
       className: 'custom-dot-marker',
       html: `<div style="
@@ -81,9 +114,9 @@ export default function RouteMap({ gpsData, height = '400px', selectedDeviceId }
         width: ${size}px;
         height: ${size}px;
         border-radius: 50%;
-        border: ${borderWidth}px solid ${isSelected ? '#1e40af' : 'white'};
-        box-shadow: ${isSelected ? '0 4px 8px rgba(0,0,0,0.4)' : '0 2px 4px rgba(0,0,0,0.3)'};
-        z-index: ${isSelected ? 1000 : 500};
+        border: ${borderWidth}px solid ${borderColor};
+        box-shadow: ${boxShadow};
+        z-index: ${zIndex};
       "></div>`,
       iconSize: [size, size],
       iconAnchor: [size/2, size/2],
@@ -107,41 +140,33 @@ export default function RouteMap({ gpsData, height = '400px', selectedDeviceId }
         {validGpsData.length > 1 && (
           <Polyline
             positions={routeCoordinates as LatLngExpression[]}
-            color={selectedDeviceId ? "#94a3b8" : "#3b82f6"}
-            weight={selectedDeviceId ? 2 : 3}
-            opacity={selectedDeviceId ? 0.4 : 0.8}
+            color="#3b82f6"
+            weight={3}
+            opacity={0.8}
           />
         )}
 
-        {/* Draw highlighted route for selected device */}
-        {selectedDeviceId && (() => {
-          const selectedDeviceData = validGpsData.filter(point => point.device_id === selectedDeviceId);
-          if (selectedDeviceData.length > 1) {
-            const selectedRouteCoordinates = selectedDeviceData.map(point => [point.latitude, point.longitude]);
-            return (
-              <Polyline
-                positions={selectedRouteCoordinates as LatLngExpression[]}
-                color="#3b82f6"
-                weight={4}
-                opacity={1}
-              />
-            );
-          }
-          return null;
-        })()}
-
         {/* Add small dot markers for each GPS point */}
         {validGpsData.map((point, index) => {
-          const isSelected = selectedDeviceId && point.device_id === selectedDeviceId;
-          const isDimmed = selectedDeviceId && !isSelected;
+          const markerState = getMarkerState(point);
+          
+          // State 3: Hide - completely removed
+          if (markerState === 'hide') {
+            return null;
+          }
+          
+          // State 2: Faded - dim colored dot, no circle
+          const isFaded = markerState === 'faded';
+          const opacity = isFaded ? 0.3 : 1;
+          const zIndex = isFaded ? 400 : 600;
           
           return (
             <Marker
               key={point.id || index}
               position={[point.latitude, point.longitude]}
-              icon={createDotIcon(point.passenger_count, isSelected)}
-              opacity={isDimmed ? 0.3 : 1}
-              zIndex={isSelected ? 1000 : 500}
+              icon={createDotIcon(point.passenger_count)}
+              opacity={opacity}
+              zIndex={zIndex}
             >
               <Popup>
                 <div className="text-sm space-y-2">
@@ -151,7 +176,7 @@ export default function RouteMap({ gpsData, height = '400px', selectedDeviceId }
                       style={{ backgroundColor: getPassengerColor(point.passenger_count) }}
                     ></div>
                     Point {index + 1}
-                    {isSelected && <span className="ml-2 text-blue-600 text-xs">(Selected)</span>}
+                    {isFaded && <span className="ml-2 text-gray-400 text-xs">(Faded)</span>}
                   </div>
                   <div>
                     <strong>Time:</strong><br />
@@ -184,22 +209,29 @@ export default function RouteMap({ gpsData, height = '400px', selectedDeviceId }
           );
         })}
 
-        {/* Add subtle circle markers for better visibility */}
+        {/* Add subtle circle markers for better visibility (only for 'show' state) */}
         {validGpsData.map((point, index) => {
-          const isSelected = selectedDeviceId && point.device_id === selectedDeviceId;
-          const isDimmed = selectedDeviceId && !isSelected;
+          const markerState = getMarkerState(point);
+          
+          // State 1: Show - colored dot with subtle big circle
+          // State 2: Faded - no circle
+          // State 3: Hide - no circle (already handled above)
+          
+          if (markerState !== 'show') {
+            return null;
+          }
           
           return (
             <CircleMarker
               key={`circle-${point.id || index}`}
               center={[point.latitude, point.longitude]}
-              radius={isSelected ? 15 : 10}
+              radius={10}
               fillColor={getPassengerColor(point.passenger_count)}
-              color={isSelected ? '#1e40af' : 'white'}
-              weight={isSelected ? 3 : 2}
-              opacity={isDimmed ? 0.3 : 0.8}
-              fillOpacity={isSelected ? 0.6 : 0.3}
-              zIndex={isSelected ? 999 : 400}
+              color="white"
+              weight={2}
+              opacity={0.8}
+              fillOpacity={0.3}
+              zIndex={500}
             />
           );
         })}

@@ -26,15 +26,22 @@ class DeviceController extends Controller
     /**
      * Display the specified device.
      */
-    public function show(Device $device)
+    public function show(Request $request, Device $device)
     {
-        $device->load(['observerDataRequests' => function ($query) {
-            $query->with(['observerFiles' => function ($fileQuery) {
+        $perPage = $request->get('per_page', 25);
+        $page = $request->get('page', 1);
+        
+        // Validate per_page parameter
+        $perPage = in_array($perPage, [10, 25, 50, 100]) ? $perPage : 25;
+        
+        $observerDataRequests = $device->observerDataRequests()
+            ->with(['observerFiles' => function ($fileQuery) {
                 $fileQuery->with('gpsData');
             }])
-                ->latest()
-                ->limit(10);
-        }]);
+            ->latest()
+            ->paginate($perPage, ['*'], 'page', $page);
+        
+        $device->setRelation('observerDataRequests', $observerDataRequests);
 
         $stats = [
             'total_files' => $device->observerFiles()->count(),

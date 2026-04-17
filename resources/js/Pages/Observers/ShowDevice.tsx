@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { 
     ArrowLeft, 
     Monitor, 
@@ -16,7 +17,11 @@ import {
     XCircle,
     TrendingUp,
     Database,
-    RefreshCw
+    RefreshCw,
+    ChevronLeft,
+    ChevronRight,
+    MoreHorizontal,
+    Users
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
@@ -24,6 +29,8 @@ export default function ShowDevice({ device, stats }) {
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [lastRefresh, setLastRefresh] = useState(new Date());
     const [countdown, setCountdown] = useState(30);
+    const [currentPage, setCurrentPage] = useState(device.observer_data_requests?.current_page || 1);
+    const [perPage, setPerPage] = useState(device.observer_data_requests?.per_page || 25);
 
     const formatFileSize = (bytes) => {
         if (bytes === 0) return '0 Bytes';
@@ -60,6 +67,29 @@ export default function ShowDevice({ device, stats }) {
             onError: () => {
                 setIsRefreshing(false);
             }
+        });
+    };
+
+    const goToPage = (page) => {
+        setCurrentPage(page);
+        router.get(route('devices.show', device.id), {
+            page: page,
+            per_page: perPage
+        }, {
+            preserveState: true,
+            preserveScroll: true
+        });
+    };
+
+    const changePerPage = (newPerPage) => {
+        setPerPage(newPerPage);
+        setCurrentPage(1);
+        router.get(route('devices.show', device.id), {
+            page: 1,
+            per_page: newPerPage
+        }, {
+            preserveState: true,
+            preserveScroll: true
         });
     };
 
@@ -104,21 +134,6 @@ export default function ShowDevice({ device, stats }) {
                         Device Details - {device.name}
                     </h2>
                     <div className="flex items-center space-x-3">
-                        <div className="flex items-center space-x-2 text-sm text-gray-600">
-                            <Clock className="h-4 w-4" />
-                            <span>Data as at: {formatLastRefresh(lastRefresh)}</span>
-                        </div>
-                        <button
-                            onClick={refreshData}
-                            disabled={isRefreshing}
-                            className="flex items-center space-x-1 px-3 py-1 text-blue-600 hover:text-blue-800 disabled:text-gray-400 transition-colors"
-                            title="Refresh data"
-                        >
-                            <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-                            <span className="text-xs">
-                                {isRefreshing ? 'Refreshing...' : `Next refresh in ${countdown}s`}
-                            </span>
-                        </button>
                         <Link href={route('devices.index')}>
                             <Button variant="outline">
                                 <ArrowLeft className="mr-2 h-4 w-4" />
@@ -248,88 +263,194 @@ export default function ShowDevice({ device, stats }) {
                         <CardHeader>
                             <CardTitle className="flex items-center">
                                 <Database className="mr-2 h-5 w-5" />
-                                Recent Datasets
+                                <div className='w-full flex justify-between items-center'>
+                                    <span>
+                                        Recent Datasets
+                                    </span>
+                                    <div className='flex'>
+                                        <div className="flex items-center space-x-2 text-sm text-gray-600">
+                                            <Clock className="h-4 w-4" />
+                                            <span>Data as at: {formatLastRefresh(lastRefresh)}</span>
+                                        </div>
+                                        <button
+                                            onClick={refreshData}
+                                            disabled={isRefreshing}
+                                            className="flex items-center space-x-1 px-3 py-1 text-blue-600 hover:text-blue-800 disabled:text-gray-400 transition-colors"
+                                            title="Refresh data"
+                                        >
+                                            <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                                            <span className="text-xs">
+                                                {isRefreshing ? 'Refreshing...' : `Next refresh in ${countdown}s`}
+                                            </span>
+                                        </button>
+                                    </div>
+                                </div>
                             </CardTitle>
                             <CardDescription>
-                                Latest 10 observer data requests from this device
+                                Observer data requests from this device with pagination controls
                             </CardDescription>
                         </CardHeader>
                         <CardContent>
-                            {device.observer_data_requests && device.observer_data_requests.length > 0 ? (
-                                <div className="rounded-md border">
-                                    <Table>
-                                        <TableHeader>
-                                            <TableRow>
-                                                <TableHead>Sync. Timestamp</TableHead>
-                                                <TableHead>Passenger Average</TableHead>
-                                                <TableHead>IP Address</TableHead>
-                                                <TableHead>User Agent</TableHead>
-                                                <TableHead>Files</TableHead>
-                                            </TableRow>
-                                        </TableHeader>
-                                        <TableBody>
-                                            {device.observer_data_requests.map((request) => (
-                                                <TableRow key={request.id}>
-                                                    <TableCell>
+                            {device.observer_data_requests && device.observer_data_requests.data && device.observer_data_requests.data.length > 0 ? (
+                                <>
+                                    {/* Pagination Controls */}
+                                    <div className="flex items-center justify-between mb-4">
+                                        <div className="flex items-center space-x-2">
+                                            <span className="text-sm text-gray-600">
+                                                Showing {((device.observer_data_requests.current_page - 1) * device.observer_data_requests.per_page) + 1} to {Math.min(device.observer_data_requests.current_page * device.observer_data_requests.per_page, device.observer_data_requests.total)} of {device.observer_data_requests.total} entries
+                                            </span>
+                                        </div>
+                                        <div className="flex items-center space-x-2">
+                                            {/* Per Page Selector */}
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button variant="outline" size="sm">
+                                                        {perPage} entries
+                                                        <ChevronLeft className="ml-2 h-4 w-4" />
+                                                    </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent>
+                                                    <DropdownMenuItem onClick={() => changePerPage(10)}>
+                                                        10 entries
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem onClick={() => changePerPage(25)}>
+                                                        25 entries
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem onClick={() => changePerPage(50)}>
+                                                        50 entries
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem onClick={() => changePerPage(100)}>
+                                                        100 entries
+                                                    </DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+
+                                            {/* Pagination Buttons */}
+                                            <div className="flex items-center space-x-1">
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() => goToPage(device.observer_data_requests.current_page - 1)}
+                                                    disabled={device.observer_data_requests.current_page <= 1}
+                                                >
+                                                    <ChevronLeft className="h-4 w-4" />
+                                                </Button>
+                                                
+                                                <span className="px-3 py-1 text-sm border rounded">
+                                                    Page {device.observer_data_requests.current_page} of {device.observer_data_requests.last_page}
+                                                </span>
+                                                
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() => goToPage(device.observer_data_requests.current_page + 1)}
+                                                    disabled={device.observer_data_requests.current_page >= device.observer_data_requests.last_page}
+                                                >
+                                                    <ChevronRight className="h-4 w-4" />
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-4">
+                                        {device.observer_data_requests.data.map((request) => (
+                                        <Card key={request.id} className="overflow-hidden">
+                                            <CardContent className="p-4">
+                                                <div className="flex items-center justify-between mb-3">
+                                                    <div className="flex items-center space-x-4">
                                                         <div className="flex items-center text-sm">
                                                             <Clock className="mr-1 h-3 w-3" />
                                                             {formatDate(request.created_at)}
-                                                            {/* {JSON.stringify(request)} */}
                                                         </div>
-                                                    </TableCell>
-                                                    <TableCell>
-                                                        {request.observer_files.length>0 ? request.observer_files.map(i=>i?.passenger_count || 0).reduce((a,c) => a+c, 0) / request.observer_files.length : 0 }
-                                                    </TableCell>
-                                                    <TableCell className="font-mono text-xs">{request.ip_address}</TableCell>
-                                                    <TableCell className="text-xs max-w-xs truncate">
-                                                        {request.user_agent}
-                                                    </TableCell>
-                                                    <TableCell>
-                                                        {request.observer_files && request.observer_files.length > 0 ? (
-                                                            <div className="space-y-2">
-                                                                {request.observer_files.map((file) => (
-                                                                    <div key={file.id} className="border-l-2 border-blue-300 pl-3 py-1">
-                                                                        <div className="flex items-center justify-between mb-1">
-                                                                            <a 
-                                                                                href={`/storage/${file.file_path}`}
-                                                                                target="_blank"
-                                                                                rel="noopener noreferrer"
-                                                                                className="text-blue-600 hover:text-blue-800 underline flex items-center text-sm font-medium"
-                                                                            >
-                                                                                <FileText className="mr-1 h-3 w-3" />
-                                                                                <span className="truncate max-w-xs">{file.original_name}</span>
-                                                                            </a>
-                                                                            <span className="text-xs text-gray-500">Passengers: {file.passenger_count || 0}</span>
+                                                        <div className="text-sm">
+                                                            <span className="font-medium">Passenger Avg:</span> {request.observer_files.length>0 ? (request.observer_files.map(i=>i?.passenger_count || 0).reduce((a,c) => a+c, 0) / request.observer_files.length).toFixed(1) : '0'}
+                                                        </div>
+                                                        <div className="text-sm text-gray-600">
+                                                            <span className="font-medium">IP:</span> {request.ip_address}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                
+                                                {request.observer_files && request.observer_files.length > 0 ? (
+                                                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                                                        {request.observer_files.map((file) => (
+                                                            <div key={file.id} className="group cursor-pointer">
+                                                                <div className="relative overflow-hidden rounded-lg border border-gray-200 hover:border-blue-300 transition-colors">
+                                                                    <a 
+                                                                        href={`/storage/${file.file_path}`}
+                                                                        target="_blank"
+                                                                        rel="noopener noreferrer"
+                                                                        className="block"
+                                                                    >
+                                                                        {file.file_path && (file.file_path.toLowerCase().endsWith('.jpg') || file.file_path.toLowerCase().endsWith('.jpeg') || file.file_path.toLowerCase().endsWith('.png') || file.file_path.toLowerCase().endsWith('.gif')) ? (
+                                                                            <img 
+                                                                                src={`/storage/${file.file_path}`}
+                                                                                alt={file.original_name}
+                                                                                className="w-full h-24 object-cover group-hover:scale-105 transition-transform duration-200"
+                                                                                onError={(e) => {
+                                                                                    e.target.style.display = 'none';
+                                                                                    e.target.nextElementSibling.style.display = 'flex';
+                                                                                }}
+                                                                            />
+                                                                        ) : null}
+                                                                        <div className="w-full h-24 bg-gray-100 flex items-center justify-center" style={{display: file.file_path && (file.file_path.toLowerCase().endsWith('.jpg') || file.file_path.toLowerCase().endsWith('.jpeg') || file.file_path.toLowerCase().endsWith('.png') || file.file_path.toLowerCase().endsWith('.gif')) ? 'none' : 'flex'}}>
+                                                                            <FileText className="h-8 w-8 text-gray-400" />
                                                                         </div>
-
-                                                                        {file.gps_data && (
-                                                                            <div className="text-xs text-gray-600 space-y-1">
+                                                                    </a>
+                                                                </div>
+                                                                <div className="mt-1 space-y-1">
+                                                                    <div className="text-xs text-gray-500 space-y-0.5">
+                                                                        <div className='flex justify-between'>
+                                                                            {file.gps_data && file.gps_data.gps_timestamp && (
                                                                                 <div className="flex items-center">
-                                                                                    <span className="font-medium">GPS:</span>
-                                                                                    <span className="ml-2 font-mono">
-                                                                                        {file.gps_data.latitude}, {file.gps_data.longitude}
-                                                                                    </span>
+                                                                                    <Clock className="mr-1 h-3 w-3" />
+                                                                                    {new Date(file.gps_data.gps_timestamp).toLocaleTimeString('en-US', { 
+                                                                                        hour: '2-digit', 
+                                                                                        minute: '2-digit',
+                                                                                        second: '2-digit',
+                                                                                        hour12: false 
+                                                                                    })}
                                                                                 </div>
-                                                                                <div className="flex items-center">
-                                                                                    <span className="font-medium">Time:</span>
-                                                                                    <span className="ml-2">
-                                                                                        {file.gps_data.gps_timestamp ? new Date(file.gps_data.gps_timestamp).toLocaleString() : 'N/A'}
-                                                                                    </span>
-                                                                                </div>
+                                                                            )}
+                                                                            <div className="flex items-center">
+                                                                                {/* <span className="mr-1">Count:</span> */}
+                                                                                <Users className="mr-1 h-3 w-3"/>
+                                                                                <span className="font-medium">{file.passenger_count || 0}</span>
                                                                             </div>
-                                                                        )}
+                                                                        </div>
+                                                                        <div className='flex justify-between'>
+                                                                            {file.gps_data && file.gps_data.gps_timestamp && (
+                                                                                <div className="flex items-center justify-between w-full">
+                                                                                    <div>{file.gps_data.latitude}</div>
+                                                                                    <div>{file.gps_data.longitude} </div>
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+                                                                        <div className="flex overflow-hidden">
+
+                                                                            <div className="text-xs text-gray-600 flex items-center justify-between opacity-50">
+                                                                                <span className="truncate max-w-full" title={file.original_name}>
+                                                                                    {/* {file.original_name.length > 15 ? file.original_name.substring(0, 12) + '...' : file.original_name} */}
+                                                                                    {file?.original_name || '-' }
+                                                                                </span>
+                                                                            </div>
+
+                                                                        </div>
                                                                     </div>
-                                                                ))}
+                                                                </div>
                                                             </div>
-                                                        ) : (
-                                                            <span className="text-gray-400 text-sm">No files</span>
-                                                        )}
-                                                    </TableCell>
-                                                </TableRow>
-                                            ))}
-                                        </TableBody>
-                                    </Table>
-                                </div>
+                                                        ))}
+                                                    </div>
+                                                ) : (
+                                                    <div className="text-center py-4 text-gray-400 text-sm">
+                                                        No files in this dataset
+                                                    </div>
+                                                )}
+                                            </CardContent>
+                                        </Card>
+                                    ))}
+                                    </div>
+                                </>
                             ) : (
                                 <div className="text-center py-8 text-gray-500">
                                     <Database className="mx-auto h-12 w-12 text-gray-300 mb-4" />

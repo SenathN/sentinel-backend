@@ -1,6 +1,8 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, router, usePage } from '@inertiajs/react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Slider } from '@/components/ui/slider';
+import { Button } from '@/components/ui/button';
 import RouteMap from '@/components/RouteMap';
 import { 
     Map, 
@@ -9,7 +11,8 @@ import {
     Clock,
     TrendingUp,
     MapPin,
-    RefreshCw
+    RefreshCw,
+    X
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
@@ -45,6 +48,8 @@ export default function Dashboard({ gpsData, activeDevices, stats }: DashboardPr
     const [lastRefresh, setLastRefresh] = useState(new Date());
     const [countdown, setCountdown] = useState(5);
     const [selectedDeviceId, setSelectedDeviceId] = useState<number | null>(null);
+    const [selectedTime, setSelectedTime] = useState<number>(100); // Default to current time
+    const [isReset, setIsReset] = useState<boolean>(true);
 
     const formatNumber = (num: number) => {
         return new Intl.NumberFormat().format(num);
@@ -65,6 +70,78 @@ export default function Dashboard({ gpsData, activeDevices, stats }: DashboardPr
             second: '2-digit'
         }).replace(',', '');
     };
+
+    // Get min and max timestamps from GPS data
+    const getTimeRange = () => {
+        if (!gpsData || gpsData.length === 0) return { min: 0, max: 100 };
+        
+        const timestamps = gpsData.map(d => new Date(d.gps_timestamp).getTime());
+        const min = Math.min(...timestamps);
+        const max = Math.max(...timestamps);
+        return { min, max };
+    };
+
+    // Find visible points based on selected time
+    const getVisiblePoints = (sliderValue: number) => {
+        if (!gpsData || gpsData.length === 0) {
+            return { visiblePoints: [], timeWindow: 0 };
+        }
+
+        const { min, max } = getTimeRange();
+        const selectedTimestamp = min + (sliderValue / 100) * (max - min);
+        
+        // Sort GPS data by timestamp
+        const sortedData = [...gpsData].sort((a, b) => 
+            new Date(a.gps_timestamp).getTime() - new Date(b.gps_timestamp).getTime()
+        );
+        
+        // Calculate time window (5% of total time range)
+        const timeWindow = (max - min) * 0.05; // 5% window
+        
+        // Find points within the time window
+        const visiblePoints = sortedData.filter(point => {
+            const pointTime = new Date(point.gps_timestamp).getTime();
+            return Math.abs(pointTime - selectedTimestamp) <= timeWindow;
+        });
+        
+        return { visiblePoints, timeWindow };
+    };
+
+    // Handle slider change
+    const handleTimeChange = (value: number[]) => {
+        const newTime = value[0];
+        setSelectedTime(newTime);
+        setIsReset(false);
+    };
+
+    // Reset to defaults (current time)
+    const resetTimeSlider = () => {
+        setSelectedTime(100);
+        setIsReset(true);
+    };
+
+    // Get current time position (100% = latest)
+    const getCurrentTimePosition = () => {
+        const { min, max } = getTimeRange();
+        const now = new Date().getTime();
+        const latest = Math.min(now, max); // Don't go beyond latest data
+        return ((latest - min) / (max - min)) * 100;
+    };
+
+    // Format timestamp for display
+    const formatSliderTime = (value: number) => {
+        const { min, max } = getTimeRange();
+        const timestamp = min + (value / 100) * (max - min);
+        return new Date(timestamp).toLocaleString();
+    };
+
+    // Initialize to current time when GPS data changes
+    useEffect(() => {
+        if (gpsData && gpsData.length > 0) {
+            const currentPosition = getCurrentTimePosition();
+            setSelectedTime(currentPosition);
+        }
+    }, [gpsData]);
 
     const refreshData = () => {
         setIsRefreshing(true);
@@ -222,7 +299,50 @@ export default function Dashboard({ gpsData, activeDevices, stats }: DashboardPr
                                         gpsData={gpsData} 
                                         height="500px" 
                                         selectedDeviceId={selectedDeviceId}
+                                        selectedTime={selectedTime}
+                                        isReset={isReset}
                                     />
+                                    
+                                    {/* Time Slider */}
+                                    <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+                                        <div className="flex items-center justify-between mb-3">
+                                            <div className="flex items-center space-x-2">
+                                                <Clock className="h-4 w-4 text-gray-600" />
+                                                <span className="text-sm font-medium text-gray-700">Time Navigation</span>
+                                            </div>
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={resetTimeSlider}
+                                                className="flex items-center space-x-1"
+                                            >
+                                                <X className="h-3 w-3" />
+                                                <span>Reset</span>
+                                            </Button>
+                                        </div>
+                                        
+                                        <div className="space-y-3">
+                                            <div className="flex items-center justify-between text-xs text-gray-600">
+                                                <span>{formatSliderTime(0)}</span>
+                                                <span className={`font-medium ${isReset ? 'text-gray-500' : 'text-blue-600'}`}>
+                                                    Selected: {formatSliderTime(selectedTime)}
+                                                </span>
+                                                <span>{formatSliderTime(100)}</span>
+                                            </div>
+                                            
+                                            <Slider
+                                                value={[selectedTime]}
+                                                onValueChange={handleTimeChange}
+                                                max={100}
+                                                step={1}
+                                                className={`w-full ${isReset ? 'opacity-60' : ''}`}
+                                            />
+                                            
+                                            <div className="text-center text-xs text-gray-500">
+                                                {isReset ? 'Showing current time (drag to explore timeline)' : 'Showing selected time window'}
+                                            </div>
+                                        </div>
+                                    </div>
                                     
                                     {/* Map Legend */}
                                     <div className="mt-4 flex items-center justify-center space-x-6 text-sm">
