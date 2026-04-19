@@ -23,11 +23,11 @@ interface DashboardProps {
         longitude: number;
         gps_timestamp: string;
         passenger_count: number;
-        device_id: number;
+        device_id: string;
         device_name: string;
     }>;
     activeDevices: Array<{
-        device_id: number;
+        device_id: string;
         device_name: string;
         latest_timestamp: string;
         dataset_count: number;

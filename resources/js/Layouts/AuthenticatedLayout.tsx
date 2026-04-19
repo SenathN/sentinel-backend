@@ -49,6 +49,22 @@ export default function AuthenticatedLayout({ header, children }) {
                                         </DropdownMenuItem>
                                     </DropdownMenuContent>
                                 </DropdownMenu>
+
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <button className="inline-flex items-center px-1 pt-1 border-b-2 border-transparent text-sm font-medium leading-5 text-gray-500 hover:text-gray-700 hover:border-gray-300 focus:outline-none focus:text-gray-700 focus:border-gray-300 transition duration-150 ease-in-out">
+                                            Analytics
+                                            <ChevronDown className="ml-1 h-4 w-4" />
+                                        </button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent>
+                                        <DropdownMenuItem asChild>
+                                            <Link href={route('analytics.heatmap')}>
+                                                Heatmap Analysis
+                                            </Link>
+                                        </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
                             </div>
                         </div>
 
@@ -159,6 +175,15 @@ export default function AuthenticatedLayout({ header, children }) {
                             <div className="pl-4 space-y-1">
                                 <ResponsiveNavLink href={route('devices.index')}>
                                     Devices
+                                </ResponsiveNavLink>
+                            </div>
+                        </div>
+
+                        <div className="px-4">
+                            <div className="text-base font-medium text-gray-800 mb-2">Analytics</div>
+                            <div className="pl-4 space-y-1">
+                                <ResponsiveNavLink href={route('analytics.heatmap')}>
+                                    Heatmap Analysis
                                 </ResponsiveNavLink>
                             </div>
                         </div>

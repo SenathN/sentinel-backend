@@ -13,7 +13,7 @@ class DashboardController extends Controller
     {
         // Get recent GPS data from the last 24 hours
         $recentGpsData = GpsData::with(['device'])
-            ->where('gps_timestamp', '>=', now()->subHours(24))
+            ->where('gps_timestamp', '>=', now()->startOfDay())
             ->orderBy('gps_timestamp', 'desc')
             ->get()
             ->map(function ($gps) {
