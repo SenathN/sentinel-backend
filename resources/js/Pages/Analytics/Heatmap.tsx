@@ -204,20 +204,29 @@ export default function Heatmap({ heatmapData, devices, stats, filters }: Heatma
             gridCells.forEach((cell) => {
                 // Normalize avg passengers to [0, 1] using min-max
                 const normalizedPassengers = (cell.avgPassengers - minPassengers) / passengerRange;
-                // Opacity proportional to min-max, ranging from 0 to 0.8
-                const opacity = normalizedPassengers * 0.8;
+                // Opacity proportional to min-max, ranging from 0.3 to 0.9
+                const opacity = 0.3 + normalizedPassengers * 0.6;
 
-                // Color gradient: green (low) -> yellow (mid) -> red (high)
+                // Color gradient: dark blue (low) -> deep orange (mid) -> dark crimson (high)
                 let fillColor: string;
-                if (normalizedPassengers < 0.5) {
-                    const t = normalizedPassengers * 2;
-                    const r = Math.round(255 * t);
-                    const g = 255;
-                    fillColor = `rgba(${r}, ${g}, 0, ${opacity})`;
+                if (normalizedPassengers < 0.33) {
+                    const t = normalizedPassengers * 3;
+                    const r = Math.round(30 + 100 * t);
+                    const g = Math.round(60 + 40 * t);
+                    const b = Math.round(180 - 80 * t);
+                    fillColor = `rgba(${r}, ${g}, ${b}, ${opacity})`;
+                } else if (normalizedPassengers < 0.66) {
+                    const t = (normalizedPassengers - 0.33) * 3;
+                    const r = Math.round(130 + 125 * t);
+                    const g = Math.round(100 - 60 * t);
+                    const b = Math.round(100 - 80 * t);
+                    fillColor = `rgba(${r}, ${g}, ${b}, ${opacity})`;
                 } else {
-                    const t = (normalizedPassengers - 0.5) * 2;
-                    const g = Math.round(255 * (1 - t));
-                    fillColor = `rgba(255, ${g}, 0, ${opacity})`;
+                    const t = (normalizedPassengers - 0.66) * 3;
+                    const r = Math.round(200 + 40 * t);
+                    const g = Math.round(40 - 30 * t);
+                    const b = Math.round(20 - 10 * t);
+                    fillColor = `rgba(${r}, ${g}, ${b}, ${opacity})`;
                 }
 
                 const circle = window.L.circle([cell.lat, cell.lng], {
@@ -469,15 +478,15 @@ export default function Heatmap({ heatmapData, devices, stats, filters }: Heatma
                             {/* Legend */}
                             <div className="mt-4 flex justify-center space-x-6 text-sm">
                                 <div className="flex items-center">
-                                    <div className="w-4 h-4 rounded-full mr-2" style={{backgroundColor: 'rgba(0, 255, 0, 0.4)'}}></div>
+                                    <div className="w-4 h-4 rounded-full mr-2" style={{backgroundColor: 'rgba(30, 60, 180, 0.5)'}}></div>
                                     <span>Low Density</span>
                                 </div>
                                 <div className="flex items-center">
-                                    <div className="w-4 h-4 rounded-full mr-2" style={{backgroundColor: 'rgba(255, 255, 0, 0.5)'}}></div>
+                                    <div className="w-4 h-4 rounded-full mr-2" style={{backgroundColor: 'rgba(200, 80, 40, 0.7)'}}></div>
                                     <span>Medium Density</span>
                                 </div>
                                 <div className="flex items-center">
-                                    <div className="w-4 h-4 rounded-full mr-2" style={{backgroundColor: 'rgba(255, 0, 0, 0.7)'}}></div>
+                                    <div className="w-4 h-4 rounded-full mr-2" style={{backgroundColor: 'rgba(180, 15, 10, 0.9)'}}></div>
                                     <span>High Density</span>
                                 </div>
                                 <div className="flex items-center">
@@ -490,5 +499,5 @@ export default function Heatmap({ heatmapData, devices, stats, filters }: Heatma
                 </div>
             </div>
         </AuthenticatedLayout>
-    );
+);
 }
