@@ -19,7 +19,6 @@ import { useState, useEffect } from 'react';
 interface HeatmapData {
     lat: number;
     lng: number;
-    weight: number;
     intensity: number;
     passenger_count: number;
     point_count: number;
@@ -80,7 +79,6 @@ export default function Heatmap({ heatmapData, devices, stats, filters }: Heatma
             const hasRealData = heatmapData && heatmapData.length > 0;
             
             if (!hasRealData) {
-                // Show a friendly "no data" message instead of fake data
                 const noDataBanner = document.createElement('div');
                 noDataBanner.className = 'absolute inset-0 flex items-center justify-center bg-gray-50 rounded-lg border-2 border-dashed border-gray-300';
                 noDataBanner.innerHTML = `
@@ -96,7 +94,6 @@ export default function Heatmap({ heatmapData, devices, stats, filters }: Heatma
                     </div>
                 `;
                 
-                // Insert the banner into the map container
                 const mapContainer = document.getElementById('heatmap-map');
                 if (mapContainer) {
                     mapContainer.appendChild(noDataBanner);
@@ -104,65 +101,151 @@ export default function Heatmap({ heatmapData, devices, stats, filters }: Heatma
                 return;
             }
 
-            // We have real data! Let's create the heatmap visualization
-            console.log('Creating heatmap with', heatmapData.length, 'data points');
+            console.log('Creating 2km grid-circle heatmap with', heatmapData.length, 'data points');
 
-            if (window.L.heat) {
-                // Use the professional heatmap plugin for smooth gradients
-                const heatData = heatmapData.map(point => [
-                    point.lat,
-                    point.lng,
-                    point.intensity
-                ]);
+            const circleRadius = 2000; // 2km
+            const gridSpacing = 4000; // 4km between centers so 2km circles don't overlap
 
-                const heat = window.L.heat(heatData, {
-                    radius: 25,
-                    blur: 15,
-                    maxZoom: 17,
-                    gradient: {
-                        0.0: 'rgba(255, 0, 0, 0.1)',    // Light red with low opacity
-                        0.5: 'rgba(255, 0, 0, 0.5)',    // Medium red with medium opacity
-                        1.0: 'rgba(255, 0, 0, 1.0)'     // Full red with high opacity
+            // Find bounding box of all data points
+            const minLat = Math.min(...heatmapData.map(p => p.lat));
+            const maxLat = Math.max(...heatmapData.map(p => p.lat));
+            const minLng = Math.min(...heatmapData.map(p => p.lng));
+            const maxLng = Math.max(...heatmapData.map(p => p.lng));
+
+            // Reference latitude for longitude-to-meters conversion
+            const refLat = (minLat + maxLat) / 2;
+            const metersPerDegLat = 111320;
+            const metersPerDegLng = 111320 * Math.cos((refLat * Math.PI) / 180);
+
+            // Convert grid spacing to degrees
+            const gridDeltaLat = gridSpacing / metersPerDegLat;
+            const gridDeltaLng = gridSpacing / metersPerDegLng;
+
+            // Radius in degrees for point collection
+            const radiusDeltaLat = circleRadius / metersPerDegLat;
+            const radiusDeltaLng = circleRadius / metersPerDegLng;
+
+            // Build a spatial index for fast lookups: bin points into grid cells
+            const spatialIndex = new Map<string, HeatmapData[]>();
+            heatmapData.forEach(point => {
+                const cellLat = Math.floor((point.lat - minLat) / gridDeltaLat);
+                const cellLng = Math.floor((point.lng - minLng) / gridDeltaLng);
+                const key = `${cellLat},${cellLng}`;
+                if (!spatialIndex.has(key)) spatialIndex.set(key, []);
+                spatialIndex.get(key)!.push(point);
+            });
+
+            // Generate grid centers and collect points within 2km of each center
+            const gridCells: {
+                lat: number;
+                lng: number;
+                points: HeatmapData[];
+                avgIntensity: number;
+                avgPassengers: number;
+                totalPassengers: number;
+                count: number;
+            }[] = [];
+
+            // Extend grid slightly beyond data bounds with padding
+            const padding = 1;
+            const startLatIdx = -padding;
+            const endLatIdx = Math.ceil((maxLat - minLat) / gridDeltaLat) + padding;
+            const startLngIdx = -padding;
+            const endLngIdx = Math.ceil((maxLng - minLng) / gridDeltaLng) + padding;
+
+            for (let i = startLatIdx; i <= endLatIdx; i++) {
+                for (let j = startLngIdx; j <= endLngIdx; j++) {
+                    const centerLat = minLat + (i + 0.5) * gridDeltaLat;
+                    const centerLng = minLng + (j + 0.5) * gridDeltaLng;
+
+                    // Check this cell + neighboring cells (3x3) for points within radius
+                    const nearbyPoints: HeatmapData[] = [];
+                    for (let di = -1; di <= 1; di++) {
+                        for (let dj = -1; dj <= 1; dj++) {
+                            const key = `${i + di},${j + dj}`;
+                            const cellPoints = spatialIndex.get(key);
+                            if (!cellPoints) continue;
+                            cellPoints.forEach(point => {
+                                const dist = window.L.latLng(centerLat, centerLng)
+                                    .distanceTo(window.L.latLng(point.lat, point.lng));
+                                if (dist <= circleRadius) {
+                                    nearbyPoints.push(point);
+                                }
+                            });
+                        }
                     }
-                }).addTo(map);
 
-                console.log('✅ Heatmap created successfully with', heatData.length, 'points');
-            } else {
-                // Fallback to colored circles if plugin doesn't load
-                console.log('Using circle fallback visualization');
-                
-                heatmapData.forEach((point, index) => {
-                    // Use red color with opacity based on weight/intensity
-                    const intensity = point.intensity;
-                    const opacity = 0 + (intensity * 0.7); // Opacity from 0.1 to 1.0
-                    
-                    // Create red circle with variable opacity
-                    const circle = window.L.circle([point.lat, point.lng], {
-                        color: 'transparent',
-                        fillColor: 'rgba(255, 0, 0, ' + opacity + ')', // Red with opacity based on weight
-                        fillOpacity: 1.0, // Full opacity for the fill color itself
-                        radius: 2000
-                    }).addTo(map);
-                    
-                    // Add informative popup with passenger details
-                    circle.bindPopup(`
-                        <div class="text-sm">
-                            <strong>Passengers:</strong> ${point.passenger_count}<br>
-                            <strong>Intensity:</strong> ${point.intensity.toFixed(2)}<br>
-                            <strong>Weight:</strong> ${point.weight.toFixed(2)}<br>
-                            <strong>Points:</strong> ${point.point_count}
-                        </div>
-                    `);
-                });
+                    if (nearbyPoints.length === 0) continue;
+
+                    const totalIntensity = nearbyPoints.reduce((sum, p) => sum + p.intensity, 0);
+                    const totalPassengers = nearbyPoints.reduce((sum, p) => sum + p.passenger_count, 0);
+
+                    gridCells.push({
+                        lat: centerLat,
+                        lng: centerLng,
+                        points: nearbyPoints,
+                        avgIntensity: totalIntensity / nearbyPoints.length,
+                        avgPassengers: totalPassengers / nearbyPoints.length,
+                        totalPassengers,
+                        count: nearbyPoints.length,
+                    });
+                }
             }
 
-            // Fit the map to show all data points nicely
+            console.log(`Grid: ${gridCells.length} cells with data from ${heatmapData.length} total points`);
+
+            // Find min/max average passenger counts for normalization
+            const avgPassengerCounts = gridCells.map(c => c.avgPassengers);
+            const minPassengers = Math.min(...avgPassengerCounts);
+            const maxPassengers = Math.max(...avgPassengerCounts);
+            const passengerRange = maxPassengers - minPassengers || 1; // avoid division by 0
+
+            // Draw circles for each grid cell
+            gridCells.forEach((cell) => {
+                // Normalize avg passengers to [0, 1] using min-max
+                const normalizedPassengers = (cell.avgPassengers - minPassengers) / passengerRange;
+                // Opacity proportional to min-max, ranging from 0 to 0.8
+                const opacity = normalizedPassengers * 0.8;
+
+                // Color gradient: green (low) -> yellow (mid) -> red (high)
+                let fillColor: string;
+                if (normalizedPassengers < 0.5) {
+                    const t = normalizedPassengers * 2;
+                    const r = Math.round(255 * t);
+                    const g = 255;
+                    fillColor = `rgba(${r}, ${g}, 0, ${opacity})`;
+                } else {
+                    const t = (normalizedPassengers - 0.5) * 2;
+                    const g = Math.round(255 * (1 - t));
+                    fillColor = `rgba(255, ${g}, 0, ${opacity})`;
+                }
+
+                const circle = window.L.circle([cell.lat, cell.lng], {
+                    color: 'rgba(0, 0, 0, 0.2)',
+                    weight: 1,
+                    fillColor: fillColor,
+                    fillOpacity: opacity,
+                    radius: circleRadius,
+                }).addTo(map);
+
+                circle.bindPopup(`
+                    <div class="text-sm">
+                        <strong>Zone Summary (2km radius):</strong><br>
+                        <strong>Points in zone:</strong> ${cell.count}<br>
+                        <strong>Total Passengers:</strong> ${cell.totalPassengers}<br>
+                        <strong>Avg Passengers:</strong> ${cell.avgPassengers.toFixed(2)}<br>
+                        <strong>Normalized:</strong> ${(normalizedPassengers * 100).toFixed(1)}%
+                    </div>
+                `);
+            });
+
+            // Fit the map to show all data points
             const bounds = window.L.latLngBounds(heatmapData.map(p => [p.lat, p.lng]));
             map.fitBounds(bounds, { padding: [50, 50] });
-            console.log('🗺️ Map bounds fitted to data');
+            console.log('Map bounds fitted to data');
 
         } catch (error) {
-            console.error('❌ Error creating visualization:', error);
+            console.error('Error creating visualization:', error);
         }
     };
 
@@ -176,20 +259,15 @@ export default function Heatmap({ heatmapData, devices, stats, filters }: Heatma
         const script = document.createElement('script');
         script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
         script.onload = () => {
-            const heatScript = document.createElement('script');
-            heatScript.src = 'https://cdn.jsdelivr.net/npm/leaflet.heat@0.2.0/dist/leaflet-heat.js';
-            heatScript.onload = () => {
-                setTimeout(() => {
-                    const leafletMap = window.L.map('heatmap-map').setView([6.9271, 79.8612], 10);
-                    window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                        attribution: '© OpenStreetMap contributors'
-                    }).addTo(leafletMap);
-                    
-                    setMap(leafletMap);
-                    console.log('Map initialized');
-                }, 200);
-            };
-            document.head.appendChild(heatScript);
+            setTimeout(() => {
+                const leafletMap = window.L.map('heatmap-map').setView([6.9271, 79.8612], 10);
+                window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '© OpenStreetMap contributors'
+                }).addTo(leafletMap);
+                
+                setMap(leafletMap);
+                console.log('Map initialized');
+            }, 200);
         };
         document.head.appendChild(script);
 
@@ -391,20 +469,20 @@ export default function Heatmap({ heatmapData, devices, stats, filters }: Heatma
                             {/* Legend */}
                             <div className="mt-4 flex justify-center space-x-6 text-sm">
                                 <div className="flex items-center">
-                                    <div className="w-4 h-4 rounded mr-2" style={{backgroundColor: 'rgba(255, 0, 0, 0.1)'}}></div>
-                                    <span>Low Density (10% opacity)</span>
+                                    <div className="w-4 h-4 rounded-full mr-2" style={{backgroundColor: 'rgba(0, 255, 0, 0.4)'}}></div>
+                                    <span>Low Density</span>
                                 </div>
                                 <div className="flex items-center">
-                                    <div className="w-4 h-4 rounded mr-2" style={{backgroundColor: 'rgba(255, 0, 0, 0.3)'}}></div>
-                                    <span>Medium-Low (30% opacity)</span>
+                                    <div className="w-4 h-4 rounded-full mr-2" style={{backgroundColor: 'rgba(255, 255, 0, 0.5)'}}></div>
+                                    <span>Medium Density</span>
                                 </div>
                                 <div className="flex items-center">
-                                    <div className="w-4 h-4 rounded mr-2" style={{backgroundColor: 'rgba(255, 0, 0, 0.6)'}}></div>
-                                    <span>Medium-High (60% opacity)</span>
+                                    <div className="w-4 h-4 rounded-full mr-2" style={{backgroundColor: 'rgba(255, 0, 0, 0.7)'}}></div>
+                                    <span>High Density</span>
                                 </div>
                                 <div className="flex items-center">
-                                    <div className="w-4 h-4 rounded mr-2" style={{backgroundColor: 'rgba(255, 0, 0, 1.0)'}}></div>
-                                    <span>High Density (100% opacity)</span>
+                                    <div className="w-4 h-4 rounded-full border border-gray-400 mr-2" style={{backgroundColor: 'transparent'}}></div>
+                                    <span>2km radius zones</span>
                                 </div>
                             </div>
                         </CardContent>

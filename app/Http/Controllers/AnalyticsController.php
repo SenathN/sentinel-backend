@@ -106,7 +106,6 @@ class AnalyticsController extends Controller
             return [
                 'lat' => $cell['lat'],
                 'lng' => $cell['lng'],
-                'weight' => 200,
                 'intensity' => $maxWeight > 0 ? $cell['weight'] / $maxWeight : 0,
                 'passenger_count' => $cell['passenger_count'],
                 'point_count' => $cell['point_count'],
