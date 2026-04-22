@@ -75,9 +75,15 @@ class DashboardController extends Controller
         ];
 
         // Hourly passenger flow for today (0-23 hours)
+        // $hourlyPassengerFlow = GpsData::whereDate('gps_timestamp', today())
+        //     ->selectRaw("CAST(strftime('%H', gps_timestamp) AS INTEGER) as hour, SUM(passenger_count) as passengers, COUNT(*) as gps_points")
+        //     ->groupByRaw("strftime('%H', gps_timestamp)")
+        //     ->orderBy('hour')
+        //     ->get()
+        //     ->keyBy('hour');
         $hourlyPassengerFlow = GpsData::whereDate('gps_timestamp', today())
-            ->selectRaw("CAST(strftime('%H', gps_timestamp) AS INTEGER) as hour, SUM(passenger_count) as passengers, COUNT(*) as gps_points")
-            ->groupByRaw("strftime('%H', gps_timestamp)")
+            ->selectRaw("HOUR(gps_timestamp) as hour, SUM(passenger_count) as passengers, COUNT(*) as gps_points")
+            ->groupByRaw("HOUR(gps_timestamp)")
             ->orderBy('hour')
             ->get()
             ->keyBy('hour');
@@ -124,21 +130,41 @@ class DashboardController extends Controller
         }
 
         // Peak hours analysis (top hours by passenger count across all data)
-        $peakHours = GpsData::selectRaw("CAST(strftime('%H', gps_timestamp) AS INTEGER) as hour, AVG(passenger_count) as avg_passengers, SUM(passenger_count) as total_passengers, COUNT(*) as frequency")
-            ->groupByRaw("strftime('%H', gps_timestamp)")
-            ->orderByDesc('total_passengers')
-            ->limit(12)
-            ->get()
-            ->map(function ($item) {
-                return [
-                    'hour' => str_pad($item->hour, 2, '0', STR_PAD_LEFT) . ':00',
-                    'avg_passengers' => round((float) $item->avg_passengers, 1),
-                    'total_passengers' => (int) $item->total_passengers,
-                    'frequency' => (int) $item->frequency,
-                ];
-            })
-            ->sortBy('hour')
-            ->values();
+        // $peakHours = GpsData::selectRaw("CAST(strftime('%H', gps_timestamp) AS INTEGER) as hour, AVG(passenger_count) as avg_passengers, SUM(passenger_count) as total_passengers, COUNT(*) as frequency")
+        //     ->groupByRaw("strftime('%H', gps_timestamp)")
+        //     ->orderByDesc('total_passengers')
+        //     ->limit(12)
+        //     ->get()
+        //     ->map(function ($item) {
+        //         return [
+        //             'hour' => str_pad($item->hour, 2, '0', STR_PAD_LEFT) . ':00',
+        //             'avg_passengers' => round((float) $item->avg_passengers, 1),
+        //             'total_passengers' => (int) $item->total_passengers,
+        //             'frequency' => (int) $item->frequency,
+        //         ];
+        //     })
+        //     ->sortBy('hour')
+        //     ->values();
+        $peakHours = GpsData::selectRaw("
+            HOUR(gps_timestamp) as hour,
+            AVG(passenger_count) as avg_passengers,
+            SUM(passenger_count) as total_passengers,
+            COUNT(*) as frequency
+        ")
+        ->groupByRaw("HOUR(gps_timestamp)")
+        ->orderByDesc('total_passengers')
+        ->limit(12)
+        ->get()
+        ->map(function ($item) {
+            return [
+                'hour' => str_pad($item->hour, 2, '0', STR_PAD_LEFT) . ':00',
+                'avg_passengers' => round((float) $item->avg_passengers, 1),
+                'total_passengers' => (int) $item->total_passengers,
+                'frequency' => (int) $item->frequency,
+            ];
+        })
+        ->sortBy('hour')
+        ->values();
 
         // Weekly comparison (this week vs last week by day)
         $weeklyComparison = [];
